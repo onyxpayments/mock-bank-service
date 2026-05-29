@@ -1,5 +1,7 @@
 # OnyxPay Mock Bank Service
 
+This service is intentionally stateless. Transaction persistence and orchestration are handled by other components within the OnyxPay platform.
+
 ## Overview
 
 The Mock Bank Service is a simulated payment provider used for development and testing purposes within the OnyxPay platform.
