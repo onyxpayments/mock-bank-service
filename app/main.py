@@ -1,5 +1,9 @@
-def add(x, y):
-    return x + y
+"""Application entrypoint."""
 
+from fastapi import FastAPI
 
-print(f"2 + 3 = {add(2, 3)}")
+from app.api.routes import router
+
+app = FastAPI(title="OnyxPay Mock Bank Service")
+
+app.include_router(router)
