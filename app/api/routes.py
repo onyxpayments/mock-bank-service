@@ -1,23 +1,9 @@
 """API routes for the mock bank service."""
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from app.api.schemas import AuthorizationRequest, AuthorizationResponse
 
 router = APIRouter()
-
-
-class AuthorizationRequest(BaseModel):
-    transaction_id: str
-    amount: float
-    currency: str
-    country: str
-
-
-class AuthorizationResponse(BaseModel):
-    transaction_id: str
-    provider_transaction_id: str
-    status: str
-    message: str
 
 
 @router.get("/health")
