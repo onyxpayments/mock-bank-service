@@ -20,6 +20,7 @@ async def send_callback_later(request: AuthorizationRequest):
     await asyncio.sleep(5)
 
     callback_payload = {
+        "transaction_id": request.transaction_id,
         "provider_transaction_id": f"mock_{request.transaction_id}",
         "status": "APPROVED",
         "message": "Mock bank payment approved asynchronously",
