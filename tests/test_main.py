@@ -1,4 +1,4 @@
-"""Tests for mock bank service."""
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -14,9 +14,14 @@ def test_health_returns_ok():
     assert response.json() == {"status": "ok"}
 
 
-def test_authorize_returns_approved_response():
+@patch("app.api.routes.asyncio.sleep", new_callable=AsyncMock)
+@patch("app.api.routes.httpx.AsyncClient.post", new_callable=AsyncMock)
+def test_authorize_returns_pending_and_sends_callback(
+    mock_post,
+    mock_sleep,
+):
     payload = {
-        "transaction_id": "trx_123",
+        "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
         "amount": 10000,
         "currency": "COP",
         "customer": {
@@ -27,26 +32,27 @@ def test_authorize_returns_approved_response():
     }
 
     response = client.post("/authorize", json=payload)
+    print(response.json())
 
     assert response.status_code == 200
 
-    body = response.json()
+    data = response.json()
 
-    assert body["transaction_id"] == "trx_123"
-    assert body["provider_transaction_id"] == "mock_trx_123"
+    assert data["transaction_id"] == payload["transaction_id"]
+    assert data["provider_transaction_id"] == f"mock_{payload['transaction_id']}"
+    assert data["status"] == "PENDING"
+
+    mock_sleep.assert_called_once_with(5)
+
+    mock_post.assert_called_once()
+
+    url = mock_post.call_args.args[0]
+    body = mock_post.call_args.kwargs["json"]
+
+    assert url.endswith(f"/provider-callbacks/mock-bank/{payload['transaction_id']}")
+
+    assert body["provider_transaction_id"] == f"mock_{payload['transaction_id']}"
     assert body["status"] == "APPROVED"
-    assert body["message"] == "Mock bank authorization approved"
-
-    response = client.post("/authorize", json=payload)
-
-    assert response.status_code == 200
-
-    body = response.json()
-
-    assert body["transaction_id"] == "trx_123"
-    assert body["provider_transaction_id"] == "mock_trx_123"
-    assert body["status"] == "APPROVED"
-    assert body["message"] == "Mock bank authorization approved"
 
 
 def test_authorize_rejects_missing_customer():
