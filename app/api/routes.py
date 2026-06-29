@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from app.api.schemas import AuthorizationRequest, AuthorizationResponse
 from app.application.scenario_selector import ScenarioSelector
 from app.domain.scenarios import CallbackScenario
-from app.infraestructure.settings import settings
+from app.infrastructure.settings import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
