@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from app.application.scenario_selector import ScenarioSelector
 from app.domain.scenarios import CallbackScenario
-from app.infraestructure.settings import Settings
+from app.infrastructure.settings import Settings
 
 
 def test_default_probability_distribution():
