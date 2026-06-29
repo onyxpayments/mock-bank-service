@@ -29,7 +29,12 @@ async def send_callback(
         "message": f"Mock bank payment {status.lower()} asynchronously",
     }
 
-    callback_url = f"{settings.orchestrator_callback_url}/{request.transaction_id}"
+    callback_url = "/".join(
+        (
+            settings.orchestrator_callback_url,
+            str(request.transaction_id),
+        )
+    )
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -81,6 +86,13 @@ async def authorize_payment(
             request,
             "DECLINED",
             settings.declined_delay_seconds,
+        )
+    elif scenario == CallbackScenario.ERROR_AFTER_5:
+        background_tasks.add_task(
+            send_callback_after,
+            request,
+            "ERROR",
+            settings.error_delay_seconds,
         )
     elif scenario == CallbackScenario.DUPLICATE_CALLBACK:
         background_tasks.add_task(send_duplicate_callback, request)

@@ -2,7 +2,7 @@
 
 Stateless payment provider simulator for local development and automated tests.
 
-It accepts an authorization request, returns `PENDING`, and selects one of five
+It accepts an authorization request, returns `PENDING`, and selects one of six
 configurable callback scenarios. It never moves real money.
 
 > This service is for development and testing only.
@@ -109,13 +109,16 @@ Every authorization selects one mutually exclusive scenario:
 
 | Scenario | Default probability | Behavior |
 | --- | ---: | --- |
-| Approved | 50% | Sends `APPROVED` after 5 seconds |
-| Declined | 20% | Sends `DECLINED` after 20 seconds |
-| Duplicate | 10% | Sends `APPROVED`, waits 1 second, and sends it again |
-| Early callback | 10% | Sends `APPROVED` before returning the HTTP response |
-| No callback | 10% | Returns `PENDING` and sends no callback |
+| Approved | 20% | Sends `APPROVED` after 5 seconds |
+| Declined | 15% | Sends `DECLINED` after 20 seconds |
+| Provider error | 25% | Sends `ERROR` after 5 seconds |
+| Duplicate | 5% | Sends `APPROVED`, waits 1 second, and sends it again |
+| Early callback | 5% | Sends `APPROVED` before returning the HTTP response |
+| No callback | 30% | Returns `PENDING` and sends no callback |
 
-The five probabilities must add up to `1.0`, otherwise settings validation
+The effective outcome mix is 30% approved, 15% declined, 25% error, and 30%
+left pending. The six scenario probabilities must add up to `1.0`; otherwise
+settings validation
 prevents the application from starting.
 
 ## Configuration
@@ -123,13 +126,15 @@ prevents the application from starting.
 | Variable | Default |
 | --- | --- |
 | `ORCHESTRATOR_CALLBACK_URL` | `http://payment-orchestrator-service:8001/provider-callbacks/mock-bank` |
-| `APPROVED_AFTER_5_PROBABILITY` | `0.50` |
-| `DECLINED_AFTER_20_PROBABILITY` | `0.20` |
-| `DUPLICATE_CALLBACK_PROBABILITY` | `0.10` |
-| `CALLBACK_BEFORE_RESPONSE_PROBABILITY` | `0.10` |
-| `NO_CALLBACK_PROBABILITY` | `0.10` |
+| `APPROVED_AFTER_5_PROBABILITY` | `0.20` |
+| `DECLINED_AFTER_20_PROBABILITY` | `0.15` |
+| `ERROR_AFTER_5_PROBABILITY` | `0.25` |
+| `DUPLICATE_CALLBACK_PROBABILITY` | `0.05` |
+| `CALLBACK_BEFORE_RESPONSE_PROBABILITY` | `0.05` |
+| `NO_CALLBACK_PROBABILITY` | `0.30` |
 | `APPROVED_DELAY_SECONDS` | `5` |
 | `DECLINED_DELAY_SECONDS` | `20` |
+| `ERROR_DELAY_SECONDS` | `5` |
 | `DUPLICATE_DELAY_SECONDS` | `1` |
 
 For a standalone local orchestrator, override the callback URL:

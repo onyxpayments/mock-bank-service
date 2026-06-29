@@ -66,6 +66,7 @@ def test_readiness_returns_ready():
     [
         (CallbackScenario.APPROVED_AFTER_5, 5, "APPROVED"),
         (CallbackScenario.DECLINED_AFTER_20, 20, "DECLINED"),
+        (CallbackScenario.ERROR_AFTER_5, 5, "ERROR"),
     ],
 )
 def test_delayed_callback_scenarios(
@@ -111,7 +112,8 @@ def test_duplicate_callback_scenario_sends_the_same_callback_twice():
     assert response.status_code == 200
     assert [call.args[0] for call in mock_sleep.await_args_list] == [5, 1]
     assert mock_callback.await_count == 2
-    assert {call.args[1] for call in mock_callback.await_args_list} == {"APPROVED"}
+    statuses = {call.args[1] for call in mock_callback.await_args_list}
+    assert statuses == {"APPROVED"}
 
 
 @patch("app.api.routes.httpx.AsyncClient.post", new_callable=AsyncMock)

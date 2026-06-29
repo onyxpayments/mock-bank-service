@@ -12,11 +12,12 @@ def test_default_probability_distribution():
     settings = Settings(_env_file=None)
 
     assert settings.scenario_probabilities == (
-        0.50,
         0.20,
-        0.10,
-        0.10,
-        0.10,
+        0.15,
+        0.25,
+        0.05,
+        0.05,
+        0.30,
     )
 
 
@@ -26,6 +27,7 @@ def test_probability_distribution_must_add_up_to_one():
             _env_file=None,
             approved_after_5_probability=0.50,
             declined_after_20_probability=0.20,
+            error_after_5_probability=0.10,
             duplicate_callback_probability=0.10,
             callback_before_response_probability=0.10,
             no_callback_probability=0.20,
@@ -34,7 +36,7 @@ def test_probability_distribution_must_add_up_to_one():
 
 @patch("app.application.scenario_selector.random.choices")
 def test_selector_uses_configured_weights(mock_choices):
-    probabilities = (0.50, 0.20, 0.10, 0.10, 0.10)
+    probabilities = (0.20, 0.15, 0.25, 0.05, 0.05, 0.30)
     mock_choices.return_value = [CallbackScenario.NO_CALLBACK]
     selector = ScenarioSelector(probabilities)
 
