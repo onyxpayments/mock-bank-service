@@ -28,7 +28,7 @@ class Transaction:
     tracking_id: str | None
     # payment_method: str | None
 
-    notification_url: str | None
+    notification_url: str
 
     amount: float
     # currency: str

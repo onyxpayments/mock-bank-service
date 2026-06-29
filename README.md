@@ -2,75 +2,46 @@
 
 Stateless payment provider simulator for local development and automated tests.
 
-The service emulates the asynchronous behavior of an external bank without
-moving real money. It accepts an authorization request, immediately returns a
-`PENDING` response, waits five seconds, and then sends an `APPROVED` callback to
-the Payment Orchestrator.
+It accepts an authorization request, returns `PENDING`, and selects one of five
+configurable callback scenarios. It never moves real money.
 
-> This service is for development and testing only. It must never be used as a
-> real payment provider.
+> This service is for development and testing only.
 
-## Responsibilities
-
-- Validate mock authorization requests.
-- Return a deterministic provider transaction identifier.
-- Respond immediately with a pending status.
-- Simulate asynchronous provider processing.
-- Send an approval callback to the Payment Orchestrator.
-- Remain stateless; transaction persistence belongs to the orchestrator.
-
-## Authorization Flow
+## Flow
 
 ```text
 Payment Orchestrator
-    │
     │ POST /authorize
     ▼
 Mock Bank
+    │ immediate PENDING response
+    │ selected asynchronous scenario
+    ▼
+POST /provider-callbacks/mock-bank/{transaction_id}
     │
-    ├── Returns PENDING immediately
-    │
-    └── Waits 5 seconds
-             │
-             │ POST /provider-callbacks/mock-bank/{transaction_id}
-             ▼
-       Payment Orchestrator
-              APPROVED
+    ▼
+Payment Orchestrator
 ```
 
 ## API
 
-When the platform is running through Docker Compose, the Mock Bank is available
-at `http://localhost:8001`.
+With the full Compose stack running, the service is available at
+`http://localhost:8001`; the container listens on port `8000`.
 
-### Health Check
-
-```http
-GET /health
-```
-
-Response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
-### Authorize Payment
+### Authorize a payment
 
 ```http
 POST /authorize
 Content-Type: application/json
+Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000
 ```
-
-Request:
 
 ```json
 {
-  "transaction_id": "9d03c06f-66b6-4495-82a7-e2fa41d740e4",
+  "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
   "amount": 10000,
   "currency": "COP",
+  "notification_url": "https://merchant.example/webhooks/payments",
   "customer": {
     "first_name": "Juan",
     "last_name": "Bello",
@@ -79,15 +50,21 @@ Request:
 }
 ```
 
+`notification_url` is required by the shared transaction contract and must be
+a valid HTTP or HTTPS URL. The Mock Bank validates it but does not call it; the
+Webhook Service owns merchant delivery.
+
 Example:
 
 ```bash
-curl -X POST http://localhost:8001/authorize \
-  -H "Content-Type: application/json" \
-  -d '{
-    "transaction_id": "9d03c06f-66b6-4495-82a7-e2fa41d740e4",
+curl --request POST http://localhost:8001/authorize \
+  --header "Content-Type: application/json" \
+  --header "Idempotency-Key: 123e4567-e89b-12d3-a456-426614174000" \
+  --data '{
+    "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
     "amount": 10000,
     "currency": "COP",
+    "notification_url": "https://merchant.example/webhooks/payments",
     "customer": {
       "first_name": "Juan",
       "last_name": "Bello",
@@ -100,81 +77,85 @@ Immediate response:
 
 ```json
 {
-  "transaction_id": "9d03c06f-66b6-4495-82a7-e2fa41d740e4",
-  "provider_transaction_id": "mock_9d03c06f-66b6-4495-82a7-e2fa41d740e4",
+  "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
+  "provider_transaction_id": "mock_123e4567-e89b-12d3-a456-426614174000",
   "status": "PENDING",
   "message": "Mock bank authorization pending"
 }
 ```
 
-Five seconds later, the service sends:
+Callback body:
 
 ```json
 {
-  "transaction_id": "9d03c06f-66b6-4495-82a7-e2fa41d740e4",
-  "provider_transaction_id": "mock_9d03c06f-66b6-4495-82a7-e2fa41d740e4",
+  "provider_transaction_id": "mock_123e4567-e89b-12d3-a456-426614174000",
   "status": "APPROVED",
   "message": "Mock bank payment approved asynchronously"
 }
 ```
 
-to:
+The transaction ID is part of the callback URL, not the JSON body:
 
 ```text
 http://payment-orchestrator-service:8001/provider-callbacks/mock-bank/{transaction_id}
 ```
 
-Interactive API documentation:
+Interactive OpenAPI documentation is available at
+`http://localhost:8001/docs`.
 
-```text
-http://localhost:8001/docs
+## Callback scenarios
+
+Every authorization selects one mutually exclusive scenario:
+
+| Scenario | Default probability | Behavior |
+| --- | ---: | --- |
+| Approved | 50% | Sends `APPROVED` after 5 seconds |
+| Declined | 20% | Sends `DECLINED` after 20 seconds |
+| Duplicate | 10% | Sends `APPROVED`, waits 1 second, and sends it again |
+| Early callback | 10% | Sends `APPROVED` before returning the HTTP response |
+| No callback | 10% | Returns `PENDING` and sends no callback |
+
+The five probabilities must add up to `1.0`, otherwise settings validation
+prevents the application from starting.
+
+## Configuration
+
+| Variable | Default |
+| --- | --- |
+| `ORCHESTRATOR_CALLBACK_URL` | `http://payment-orchestrator-service:8001/provider-callbacks/mock-bank` |
+| `APPROVED_AFTER_5_PROBABILITY` | `0.50` |
+| `DECLINED_AFTER_20_PROBABILITY` | `0.20` |
+| `DUPLICATE_CALLBACK_PROBABILITY` | `0.10` |
+| `CALLBACK_BEFORE_RESPONSE_PROBABILITY` | `0.10` |
+| `NO_CALLBACK_PROBABILITY` | `0.10` |
+| `APPROVED_DELAY_SECONDS` | `5` |
+| `DECLINED_DELAY_SECONDS` | `20` |
+| `DUPLICATE_DELAY_SECONDS` | `1` |
+
+For a standalone local orchestrator, override the callback URL:
+
+```dotenv
+ORCHESTRATOR_CALLBACK_URL=http://host.docker.internal:8002/provider-callbacks/mock-bank
 ```
 
-## Running the Full Platform
+## Health checks
 
-The Mock Bank is designed to run inside the OnyxPay Compose network:
+- `GET /health/live`: process liveness.
+- `GET /health/startup`: application startup.
+- `GET /health/ready`: stateless simulator readiness.
+- `GET /health`: backward-compatible basic check.
 
-```bash
-cd ../infra
-docker compose pull
-docker compose up -d
-```
-
-## Local Development
-
-Requirements:
-
-- Python 3.13
-- Make
-
-Install dependencies:
+## Local development
 
 ```bash
 make install
-```
-
-Run the service:
-
-```bash
-.venv/bin/uvicorn app.main:app --reload --port 8000
-```
-
-Run quality checks:
-
-```bash
 make format
 make lint
 make test
+.venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-> The callback URL currently uses the orchestrator's Docker Compose hostname.
-> A standalone local instance can accept authorization requests, but its
-> callback will not reach an orchestrator outside that network unless the URL
-> is externalized or changed.
-
-## Docker
-
-Build and run the image:
+## Docker and Compose
 
 ```bash
 docker build -t mock-bank-service .
@@ -187,56 +168,32 @@ Published image:
 ghcr.io/onyxpayments/mock-bank-service:latest
 ```
 
-## Project Structure
+For its normal callback network, run the complete stack:
+
+```bash
+cd ../infra
+docker compose pull
+docker compose up -d
+```
+
+## Project structure
 
 ```text
 .
 ├── app
-│   ├── api                 # Authorization routes and schemas
-│   ├── application         # Application layer placeholder
-│   ├── domain              # Shared payment models
-│   ├── infraestructure     # Adapter placeholders
-│   └── main.py             # FastAPI entry point
-├── tests                   # Health, validation, and callback tests
+│   ├── api                    # Authorization route and HTTP schemas
+│   ├── application            # Scenario selection
+│   ├── domain                 # Customer and callback scenario models
+│   ├── infrastructure         # Environment settings
+│   └── main.py
+├── tests
 ├── Dockerfile
 ├── makefile
 └── requirements.txt
 ```
 
-## CI/CD
+## Current limitations
 
-GitHub Actions runs formatting checks, tests, and a Docker build. Pushes to
-`main` publish:
-
-```text
-ghcr.io/onyxpayments/mock-bank-service:latest
-ghcr.io/onyxpayments/mock-bank-service:<commit-sha>
-```
-
-## Current Limitations
-
-- Failed callback deliveries are not retried or persisted.
-- RabbitMQ and repository modules are placeholders.
-
-## Probabilistic callback scenarios
-
-Each authorization selects one mutually exclusive scenario:
-
-| Scenario | Default probability | Behavior |
-| --- | ---: | --- |
-| Approved | 50% | Sends `APPROVED` after 5 seconds |
-| Declined | 20% | Sends `DECLINED` after 20 seconds |
-| Duplicate | 10% | Sends the same `APPROVED` callback twice |
-| Early callback | 10% | Sends `APPROVED` before the HTTP response |
-| No callback | 10% | Leaves the transaction pending |
-
-The probabilities and delays are configurable through environment variables.
-The five probability values must add up to `1.0`; otherwise the service
-refuses to start. See `.env.example` for the complete configuration.
-
-## Health probes
-
-- `GET /health/live` checks that the API process can respond.
-- `GET /health/startup` confirms application startup completed.
-- `GET /health/ready` confirms the stateless simulator is ready.
-- `GET /health` remains available for backward compatibility.
+- Failed callbacks are not retried or persisted by the Mock Bank.
+- The incoming `Idempotency-Key` header is sent by the orchestrator but is not
+  currently enforced by this simulator.

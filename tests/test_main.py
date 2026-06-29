@@ -14,6 +14,7 @@ VALID_PAYLOAD = {
     "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
     "amount": 10000,
     "currency": "COP",
+    "notification_url": "https://merchant.example/webhooks/payments",
     "customer": {
         "first_name": "Juan",
         "last_name": "Bello",
@@ -153,6 +154,15 @@ def test_authorize_rejects_missing_customer():
         "amount": 10000,
         "currency": "COP",
     }
+
+    response = client.post("/authorize", json=payload)
+
+    assert response.status_code == 422
+
+
+def test_authorize_rejects_missing_notification_url():
+    payload = dict(VALID_PAYLOAD)
+    payload.pop("notification_url")
 
     response = client.post("/authorize", json=payload)
 
